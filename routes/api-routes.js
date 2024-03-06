@@ -90,7 +90,19 @@ router
 
 // This route should create a new User
 router.post('/user', async (req, res) => {
-  const {username, password} = req.body
+  try {
+    const {username, password} = req.body
+    if (!(username && password))
+      return res.status(400).send('please provide username and password')
+    const hash = await bcrypt.hash(password, 10)
+    await db.query(`INSERT INTO users (username, password) VALUES (?, ? )`, [username, hash])
+    res.redirect('/login')
+  } catch(err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return res.status(409).send('user exists already')
+    res.status(500).send('Err: ' + err.message)
+  }
+})  
   // if the username or password is not provided, return a 400 status
   // hash the password using bcrypt.hash and use 10 salt rounds
   // then insert the username and hashed password into the users table
@@ -99,11 +111,24 @@ router.post('/user', async (req, res) => {
   // if an error occurs with a code property equal to 'ER_DUP_ENTRY'
   // return a 409 status code (the user exists already)
   // for any other error, return a 500 status
-})
+
 
 // This route will log the user in and create the session
 router.post('/login', async (req, res) => {
   const {username, password} = req.body
+  if (!(username && password))
+    return res.status(400).send('please provide username and password')
+  const [[user]] = await db.query(`SELECT * FROM users WHERE username=?`, username)
+  if (!user) return res.status(400).send('no user found')
+  const correctPassword = await bcrypt.compare(password, user.password)
+  if (!correctPassword) {
+    return res.status(400).send('password incorrect')
+  } else {
+    req.session.loggedIn = true
+    req.session.userID = user_id
+    req.session.save(() => res.redirect('/'))
+  }
+})  
   // if the username or password is not provided, return a 400 status
   // Query the database by the username for the user
   // If no user is found, return a 400 status code
@@ -112,10 +137,10 @@ router.post('/login', async (req, res) => {
   // If the password matches, set req.session.loggedIn to true
   // set req.session.userId to the user's id
   // call req.session.save and in the callback redirect to /
-})
+
 
 router.get('/logout', async (req, res) => {
-  // call req.session.destroy and in the callback redirect to /
+  req.session.destroy(() => res.redirect('/'))
 })
-
+// call req.session.destroy and in the callback redirect to /
 module.exports = router
