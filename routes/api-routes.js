@@ -95,12 +95,12 @@ router.post('/user', async (req, res) => {
     if (!(username && password))
       return res.status(400).send('please provide username and password')
     const hash = await bcrypt.hash(password, 10)
-    await db.query(`INSERT INTO users (username, password) VALUES (?, ? )`, [username, hash])
+    await db.query(`INSERT INTO users (username, password) VALUES (?, ?)`, [username, hash])
     res.redirect('/login')
   } catch(err) {
     if (err.code === 'ER_DUP_ENTRY')
       return res.status(409).send('user exists already')
-    res.status(500).send('Err: ' + err.message)
+    res.status(500).send(err.message)
   }
 })  
   // if the username or password is not provided, return a 400 status
@@ -121,13 +121,10 @@ router.post('/login', async (req, res) => {
   const [[user]] = await db.query(`SELECT * FROM users WHERE username=?`, username)
   if (!user) return res.status(400).send('no user found')
   const correctPassword = await bcrypt.compare(password, user.password)
-  if (!correctPassword) {
-    return res.status(400).send('password incorrect')
-  } else {
-    req.session.loggedIn = true
-    req.session.userID = user_id
-    req.session.save(() => res.redirect('/'))
-  }
+  if (!correctPassword) return res.status(400).send('password incorrect')
+  req.session.loggedIn = true
+  req.session.userId = user.id
+  req.session.save(() => res.redirect('/'))
 })  
   // if the username or password is not provided, return a 400 status
   // Query the database by the username for the user
